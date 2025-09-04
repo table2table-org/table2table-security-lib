@@ -1,0 +1,33 @@
+# Multi-stage Dockerfile for Security Library (Development)
+FROM maven:3.9.5-eclipse-temurin-17 AS builder
+
+WORKDIR /app
+COPY pom.xml .
+COPY .mvn .mvn
+COPY mvnw .
+RUN ./mvnw dependency:go-offline -B
+
+COPY src ./src
+RUN ./mvnw clean install -DskipTests -B
+
+# Runtime stage - This is a library, so we'll create a minimal runtime
+FROM openjdk:17-jdk-slim
+
+ENV SPRING_PROFILES_ACTIVE=dev
+
+LABEL version="dev"
+LABEL description="Table2Table Security Library - Development build"
+
+RUN groupadd -g 1001 appuser && \
+    useradd -u 1001 -g appuser -m appuser
+
+WORKDIR /app
+COPY --from=builder /app/target/security-lib-*.jar security-lib.jar
+RUN chown appuser:appuser security-lib.jar
+
+USER appuser
+
+# This is a library, so we don't expose any ports
+# The library will be used by other services
+
+ENTRYPOINT ["echo", "Security Library built successfully"]
